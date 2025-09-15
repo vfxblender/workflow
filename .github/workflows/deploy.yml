@@ -1,0 +1,54 @@
+name: Deploy game to Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Unzip the game to dist/
+      - name: Unzip export
+        run: |
+          rm -rf dist
+          mkdir dist
+          unzip -o game.zip -d dist
+
+          # If your ZIP contains a single nested folder (dist/MyGame/index.html),
+          # move its contents up to dist/ so index.html is at dist/index.html.
+          if [ $(find dist -mindepth 1 -maxdepth 1 -type d | wc -l) -eq 1 ] && [ ! -f dist/index.html ]; then
+            inner=$(find dist -mindepth 1 -maxdepth 1 -type d | head -n1)
+            shopt -s dotglob
+            mv "$inner"/* dist/
+            rmdir "$inner"
+          fi
+
+          # Avoid Jekyll processing edge-cases
+          touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
